@@ -2,440 +2,158 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Medicine Barcode Scanner</title>
-  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Barcode Scanner</title>
+  <script src="https://unpkg.com/@zxing/browser@latest"></script>
   <style>
-    * {
-      box-sizing: border-box;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    :root {
-      --bg1: #e8f6f5;
-      --bg2: #f3fbfb;
-      --navy: #071a3d;
-      --navy2: #0d224d;
-      --card: rgba(255,255,255,0.72);
-      --card-border: rgba(255,255,255,0.55);
-      --text: #0f172a;
-      --muted: #6b7280;
-      --green: #16c172;
-      --green2: #12a763;
-      --blue: #dbeafe;
-      --blue-text: #1d4ed8;
-    }
-
+    * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: Inter, Arial, sans-serif;
-      background: linear-gradient(180deg, var(--bg1) 0%, var(--bg2) 100%);
-      color: var(--text);
-      min-height: 100vh;
+      font-family: Arial, sans-serif;
+      background: #f3f6f8;
+      color: #111827;
     }
-
     .app {
       max-width: 430px;
       margin: 0 auto;
-      min-height: 100vh;
-      padding: 14px 14px 28px;
-    }
-
-    .topbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 16px;
-    }
-
-    .icon-btn {
-      width: 42px;
-      height: 42px;
-      border-radius: 999px;
-      border: none;
-      background: rgba(255,255,255,0.7);
-      box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
-      font-size: 20px;
-      color: #64748b;
-    }
-
-    .top-title {
-      text-align: center;
-      flex: 1;
-    }
-
-    .top-title small {
-      display: block;
-      font-size: 12px;
-      color: #94a3b8;
-      margin-bottom: 3px;
-    }
-
-    .top-title h1 {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 800;
-      color: #475569;
-    }
-
-    .hero-card,
-    .info-card {
-      background: var(--card);
-      border: 1px solid var(--card-border);
-      border-radius: 28px;
-      box-shadow: 0 14px 28px rgba(15, 23, 42, 0.06);
-      backdrop-filter: blur(10px);
-    }
-
-    .hero-card {
-      padding: 18px;
-    }
-
-    .hero-card h2 {
-      margin: 0 0 10px;
-      font-size: 24px;
-      line-height: 1.2;
-      font-weight: 800;
-      color: #0f172a;
-    }
-
-    .hero-card p {
-      margin: 0 0 18px;
-      font-size: 14px;
-      color: var(--muted);
-      line-height: 1.55;
-    }
-
-    .camera-shell {
-      background: linear-gradient(180deg, var(--navy) 0%, var(--navy2) 100%);
-      border-radius: 30px;
       padding: 16px;
-      overflow: hidden;
-      box-shadow: 0 20px 40px rgba(7, 26, 61, 0.2);
     }
-
-    .camera-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      color: #f8fafc;
-      font-size: 14px;
-      font-weight: 700;
-      margin-bottom: 12px;
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
     }
-
-    .live-badge {
-      background: rgba(22, 193, 114, 0.16);
-      color: #7ef0b6;
-      padding: 8px 12px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 800;
-      letter-spacing: 0.04em;
+    p {
+      margin: 0 0 16px;
+      color: #4b5563;
+      line-height: 1.5;
     }
-
-    .scanner-wrap {
+    .camera-box {
       position: relative;
       background: #000;
-      border-radius: 24px;
+      border-radius: 20px;
       overflow: hidden;
-      min-height: 420px;
+      min-height: 360px;
     }
-
-    #reader {
+    video {
       width: 100%;
-      min-height: 420px;
+      height: 360px;
+      object-fit: cover;
+      display: block;
       background: #000;
     }
-
-    /* Force the scanner area to fill nicely */
-    #reader video {
-      width: 100% !important;
-      height: 420px !important;
-      object-fit: cover !important;
-      border-radius: 24px !important;
-    }
-
-    #reader__scan_region {
-      min-height: 420px !important;
-      background: #000 !important;
-    }
-
-    #reader__dashboard {
-      display: none !important;
-    }
-
-    #reader img {
-      max-width: 100%;
-    }
-
-    /* Improve default html5-qrcode overlay appearance */
-    #reader__scan_region > img,
-    #reader__scan_region svg {
-      opacity: 0.95;
-    }
-
-    .camera-placeholder {
+    .guide {
       position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
-      gap: 14px;
-      color: rgba(255,255,255,0.86);
-      background:
-        radial-gradient(circle at center, rgba(34,197,94,0.12), rgba(0,0,0,0) 35%),
-        #000;
-      z-index: 2;
-      transition: opacity 0.25s ease;
+      left: 12%;
+      right: 12%;
+      top: 40%;
+      height: 80px;
+      border: 3px solid #22c55e;
+      border-radius: 18px;
       pointer-events: none;
     }
-
-    .camera-placeholder.hidden {
-      opacity: 0;
-      visibility: hidden;
-    }
-
-    .placeholder-box {
-      width: 78%;
-      height: 90px;
-      border: 3px solid rgba(255,255,255,0.9);
-      border-radius: 22px;
-      position: relative;
-    }
-
-    .placeholder-line {
-      position: absolute;
-      left: 8%;
-      right: 8%;
-      top: 50%;
-      transform: translateY(-50%);
-      height: 2px;
-      background: linear-gradient(90deg, transparent, #22d3ee, transparent);
-      box-shadow: 0 0 12px #22d3ee;
-    }
-
-    .placeholder-text {
-      font-size: 14px;
-      color: rgba(255,255,255,0.75);
-      font-weight: 600;
-    }
-
-    .controls {
+    .buttons {
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-columns: 1fr 1fr;
       gap: 12px;
       margin-top: 16px;
     }
-
-    button.action-btn {
+    button {
       border: none;
-      border-radius: 18px;
-      padding: 16px 12px;
-      font-size: 15px;
-      font-weight: 800;
+      border-radius: 14px;
+      padding: 14px;
+      font-size: 16px;
+      font-weight: 700;
       cursor: pointer;
-      box-shadow: 0 10px 18px rgba(15, 23, 42, 0.06);
     }
-
-    .btn-start {
-      background: linear-gradient(135deg, var(--green), var(--green2));
+    #startBtn {
+      background: #16a34a;
       color: white;
     }
-
-    .btn-stop {
-      background: rgba(255,255,255,0.78);
+    #stopBtn {
+      background: #e5e7eb;
       color: #111827;
     }
-
-    .btn-torch {
-      background: var(--blue);
-      color: var(--blue-text);
-    }
-
-    .btn-disabled {
-      opacity: 0.5;
-    }
-
-    .info-card {
+    .card {
       margin-top: 16px;
-      padding: 18px;
+      background: white;
+      border-radius: 18px;
+      padding: 16px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.06);
     }
-
     .label {
       font-size: 12px;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
       color: #6b7280;
-      margin-bottom: 10px;
-    }
-
-    #status {
-      font-size: 15px;
       font-weight: 700;
-      color: #374151;
-      line-height: 1.5;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
     }
-
+    #status {
+      font-size: 16px;
+      font-weight: 600;
+    }
     #result {
-      font-size: 32px;
-      font-weight: 900;
-      color: #111827;
-      line-height: 1.15;
+      font-size: 28px;
+      font-weight: 800;
       word-break: break-word;
-      min-height: 36px;
+      min-height: 34px;
     }
-
     #lastTime {
       margin-top: 8px;
-      font-size: 13px;
       color: #6b7280;
-    }
-
-    ul {
-      margin: 0;
-      padding-left: 22px;
-      color: #374151;
-      line-height: 1.7;
-    }
-
-    .footer {
-      text-align: center;
-      color: #94a3b8;
-      font-size: 12px;
-      margin-top: 20px;
-    }
-
-    @media (max-width: 390px) {
-      .hero-card h2 {
-        font-size: 21px;
-      }
-
-      .controls {
-        grid-template-columns: 1fr;
-      }
-
-      .scanner-wrap,
-      #reader,
-      #reader video,
-      #reader__scan_region {
-        min-height: 360px !important;
-        height: 360px !important;
-      }
+      font-size: 13px;
     }
   </style>
 </head>
 <body>
   <div class="app">
-    <div class="topbar">
-      <button class="icon-btn" type="button">←</button>
-      <div class="top-title">
-        <small>Smart Inventory</small>
-        <h1>Barcode Scanner</h1>
-      </div>
-      <button class="icon-btn" type="button">⋯</button>
+    <h1>Medicine Barcode Scanner</h1>
+    <p>Tap start, allow camera access, then place the barcode inside the green frame.</p>
+
+    <div class="camera-box">
+      <video id="video" muted playsinline></video>
+      <div class="guide"></div>
     </div>
 
-    <div class="hero-card">
-      <h2>Scan medicine barcode quickly</h2>
-      <p>Place the barcode inside the frame. The scanner will detect and send it automatically.</p>
-
-      <div class="camera-shell">
-        <div class="camera-head">
-          <div>Live Camera</div>
-          <div class="live-badge" id="liveBadge">READY</div>
-        </div>
-
-        <div class="scanner-wrap">
-          <div id="reader"></div>
-
-          <div class="camera-placeholder" id="cameraPlaceholder">
-            <div class="placeholder-box">
-              <div class="placeholder-line"></div>
-            </div>
-            <div class="placeholder-text">Camera preview will appear here</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="controls">
-        <button id="startBtn" class="action-btn btn-start" type="button">Start Scan</button>
-        <button id="stopBtn" class="action-btn btn-stop" type="button">Stop</button>
-        <button id="torchBtn" class="action-btn btn-torch btn-disabled" type="button">Torch</button>
-      </div>
+    <div class="buttons">
+      <button id="startBtn" type="button">Start Scan</button>
+      <button id="stopBtn" type="button">Stop</button>
     </div>
 
-    <div class="info-card">
+    <div class="card">
       <div class="label">Status</div>
-      <div id="status">Waiting for scan...</div>
+      <div id="status">Waiting to start...</div>
     </div>
 
-    <div class="info-card">
+    <div class="card">
       <div class="label">Last Barcode</div>
       <div id="result">—</div>
       <div id="lastTime">No scan yet</div>
     </div>
-
-    <div class="info-card">
-      <div class="label">Best Scan Tips</div>
-      <ul>
-        <li>Use the back camera.</li>
-        <li>Keep the barcode inside the scanner frame.</li>
-        <li>Use good light or enable torch.</li>
-        <li>Printed barcodes scan faster than barcodes on a screen.</li>
-      </ul>
-    </div>
-
-    <div class="footer">Powered by your GitHub Pages scanner</div>
   </div>
 
   <script>
-    window.addEventListener("DOMContentLoaded", function () {
+    window.addEventListener("DOMContentLoaded", () => {
       const webhook = "PASTE_YOUR_N8N_WEBHOOK_HERE";
 
-      let html5QrCode = null;
-      let isRunning = false;
-      let lastCode = "";
-      let lastScanAt = 0;
-      let currentTrack = null;
-      let torchOn = false;
-
+      const videoEl = document.getElementById("video");
       const statusEl = document.getElementById("status");
       const resultEl = document.getElementById("result");
       const lastTimeEl = document.getElementById("lastTime");
-      const liveBadgeEl = document.getElementById("liveBadge");
-      const placeholderEl = document.getElementById("cameraPlaceholder");
-
       const startBtn = document.getElementById("startBtn");
       const stopBtn = document.getElementById("stopBtn");
-      const torchBtn = document.getElementById("torchBtn");
+
+      let codeReader = null;
+      let controls = null;
+      let lastCode = "";
+      let lastScanAt = 0;
 
       function setStatus(text) {
         statusEl.textContent = text;
       }
 
-      function setLiveBadge(text) {
-        liveBadgeEl.textContent = text;
-      }
-
-      function hidePlaceholder() {
-        placeholderEl.classList.add("hidden");
-      }
-
-      function showPlaceholder() {
-        placeholderEl.classList.remove("hidden");
-      }
-
-      function setTorchEnabled(enabled) {
-        torchBtn.disabled = !enabled;
-        torchBtn.classList.toggle("btn-disabled", !enabled);
-      }
-
       async function sendBarcode(code) {
         const now = Date.now();
-
         if (code === lastCode && now - lastScanAt < 1500) return;
 
         lastCode = code;
@@ -443,11 +161,10 @@
 
         resultEl.textContent = code;
         lastTimeEl.textContent = "Last scan: " + new Date().toLocaleTimeString();
-        setStatus("Barcode detected successfully.");
-        setLiveBadge("SCANNED");
+        setStatus("Barcode detected.");
 
         if (!webhook || webhook === "PASTE_YOUR_N8N_WEBHOOK_HERE") {
-          setStatus("Scanned locally. Add your webhook URL to send data.");
+          setStatus("Scanned locally. Add webhook URL to send data.");
           return;
         }
 
@@ -458,164 +175,78 @@
             body: JSON.stringify({ barcode: code })
           });
           setStatus("Barcode sent to system.");
-        } catch (error) {
-          console.error(error);
+        } catch (err) {
+          console.error(err);
           setStatus("Scanned, but webhook failed.");
         }
       }
 
-      async function detectTorchSupport() {
+      async function startScanner() {
         try {
-          const video = document.querySelector("#reader video");
-          if (!video || !video.srcObject) {
-            currentTrack = null;
-            setTorchEnabled(false);
+          if (controls) {
+            setStatus("Scanner already running.");
             return;
           }
 
-          const track = video.srcObject.getVideoTracks()[0];
-          currentTrack = track;
+          setStatus("Opening camera...");
 
-          const capabilities = track.getCapabilities ? track.getCapabilities() : {};
-          setTorchEnabled(!!capabilities.torch);
-        } catch (e) {
-          currentTrack = null;
-          setTorchEnabled(false);
-        }
-      }
+          const hints = new Map();
+          hints.set(ZXingBrowser.DecodeHintType.POSSIBLE_FORMATS, [
+            ZXingBrowser.BarcodeFormat.EAN_13,
+            ZXingBrowser.BarcodeFormat.EAN_8,
+            ZXingBrowser.BarcodeFormat.UPC_A,
+            ZXingBrowser.BarcodeFormat.UPC_E,
+            ZXingBrowser.BarcodeFormat.CODE_128
+          ]);
 
-      async function startScanner() {
-        if (isRunning) {
-          setStatus("Scanner is already running.");
-          return;
-        }
+          codeReader = new ZXingBrowser.BrowserMultiFormatReader(hints);
 
-        setStatus("Starting camera...");
-        setLiveBadge("STARTING");
-        hidePlaceholder();
-
-        html5QrCode = new Html5Qrcode("reader");
-
-        try {
-          const cameras = await Html5Qrcode.getCameras();
-
-          if (!cameras || cameras.length === 0) {
+          const devices = await ZXingBrowser.BrowserCodeReader.listVideoInputDevices();
+          if (!devices || devices.length === 0) {
             setStatus("No camera found.");
-            setLiveBadge("ERROR");
-            showPlaceholder();
             return;
           }
 
           const backCamera =
-            cameras.find(c =>
-              (c.label || "").toLowerCase().includes("back") ||
-              (c.label || "").toLowerCase().includes("rear") ||
-              (c.label || "").toLowerCase().includes("environment")
-            ) || cameras[0];
+            devices.find(d =>
+              /back|rear|environment/i.test(d.label || "")
+            ) || devices[0];
 
-          await html5QrCode.start(
-            { deviceId: { exact: backCamera.id } },
-            {
-              fps: 15,
-              qrbox: { width: 250, height: 90 },
-              aspectRatio: 1.7777778,
-              disableFlip: false,
-              experimentalFeatures: {
-                useBarCodeDetectorIfSupported: true
-              },
-              formatsToSupport: [
-                Html5QrcodeSupportedFormats.EAN_13,
-                Html5QrcodeSupportedFormats.EAN_8,
-                Html5QrcodeSupportedFormats.UPC_A,
-                Html5QrcodeSupportedFormats.UPC_E,
-                Html5QrcodeSupportedFormats.CODE_128
-              ]
-            },
-            (decodedText) => {
-              sendBarcode(decodedText);
-            },
-            () => {}
+          controls = await codeReader.decodeFromVideoDevice(
+            backCamera.deviceId,
+            videoEl,
+            (result, error) => {
+              if (result) {
+                sendBarcode(result.getText());
+              }
+            }
           );
 
-          isRunning = true;
           setStatus("Scanner is live. Point at barcode.");
-          setLiveBadge("LIVE");
-
-          setTimeout(detectTorchSupport, 800);
         } catch (err) {
           console.error(err);
           setStatus("Could not start scanner.");
-          setLiveBadge("ERROR");
-          showPlaceholder();
-          html5QrCode = null;
-          isRunning = false;
         }
       }
 
       async function stopScanner() {
-        if (!html5QrCode || !isRunning) {
-          showPlaceholder();
-          setStatus("Scanner stopped.");
-          setLiveBadge("READY");
-          setTorchEnabled(false);
-          torchOn = false;
-          torchBtn.textContent = "Torch";
-          return;
-        }
-
         try {
-          await html5QrCode.stop();
-          await html5QrCode.clear();
-
-          html5QrCode = null;
-          isRunning = false;
-          currentTrack = null;
-          torchOn = false;
-          torchBtn.textContent = "Torch";
-          setTorchEnabled(false);
-
-          showPlaceholder();
+          if (controls) {
+            controls.stop();
+            controls = null;
+          }
+          if (codeReader && typeof codeReader.reset === "function") {
+            codeReader.reset();
+          }
           setStatus("Scanner stopped.");
-          setLiveBadge("READY");
         } catch (err) {
           console.error(err);
-          setStatus("Failed to stop scanner.");
-          setLiveBadge("ERROR");
-        }
-      }
-
-      async function toggleTorch() {
-        if (!currentTrack || !currentTrack.getCapabilities) {
-          setStatus("Torch is not supported on this phone/browser.");
-          return;
-        }
-
-        const capabilities = currentTrack.getCapabilities();
-        if (!capabilities.torch) {
-          setStatus("Torch is not supported on this phone/browser.");
-          return;
-        }
-
-        try {
-          torchOn = !torchOn;
-          await currentTrack.applyConstraints({
-            advanced: [{ torch: torchOn }]
-          });
-
-          torchBtn.textContent = torchOn ? "Torch Off" : "Torch";
-          setStatus(torchOn ? "Torch enabled." : "Torch disabled.");
-        } catch (err) {
-          console.error(err);
-          setStatus("Could not control torch.");
+          setStatus("Stop failed.");
         }
       }
 
       startBtn.addEventListener("click", startScanner);
       stopBtn.addEventListener("click", stopScanner);
-      torchBtn.addEventListener("click", toggleTorch);
-
-      showPlaceholder();
-      setTorchEnabled(false);
     });
   </script>
 </body>
