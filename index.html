@@ -1,36 +1,525 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<title>Medicine Barcode Scanner</title>
-<script src="https://unpkg.com/@zxing/library@latest"></script>
-</head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Medicine Barcode Scanner</title>
 
-<body>
+  <script type="module">
+    import {
+      BrowserMultiFormatReader,
+      BarcodeFormat,
+      DecodeHintType
+    } from 'https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/+esm';
 
-<h2>Scan Medicine Barcode</h2>
-<video id="video" width="300"></video>
+    const webhook = "PASTE_YOUR_N8N_WEBHOOK_HERE";
 
-<script>
-const webhook = "PASTE_YOUR_N8N_WEBHOOK_HERE";
+    let stream = null;
+    let scanning = false;
+    let detector = null;
+    let rafId = null;
+    let zxingReader = null;
+    let lastCode = "";
+    let lastSentAt = 0;
 
-const codeReader = new ZXing.BrowserMultiFormatReader();
-const video = document.getElementById('video');
+    const video = document.getElementById("video");
+    const statusEl = document.getElementById("status");
+    const resultValueEl = document.getElementById("resultValue");
+    const resultTimeEl = document.getElementById("resultTime");
+    const startBtn = document.getElementById("startBtn");
+    const stopBtn = document.getElementById("stopBtn");
+    const torchBtn = document.getElementById("torchBtn");
+    const badgeEl = document.getElementById("badge");
 
-codeReader.decodeFromVideoDevice(null, video, (result, err) => {
-  if (result) {
+    function setStatus(text) {
+      statusEl.textContent = text;
+    }
 
-    fetch(webhook, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        barcode: result.getText()
-      })
+    function setBadge(text, type = "idle") {
+      badgeEl.textContent = text;
+      badgeEl.className = "badge " + type;
+    }
+
+    function updateResult(code) {
+      resultValueEl.textContent = code;
+      resultTimeEl.textContent = "Last scan: " + new Date().toLocaleTimeString();
+    }
+
+    async function sendBarcode(code) {
+      const now = Date.now();
+      if (code === lastCode && now - lastSentAt < 1500) return;
+
+      lastCode = code;
+      lastSentAt = now;
+
+      updateResult(code);
+      setStatus("Barcode detected and sent.");
+      setBadge("SCANNED", "success");
+
+      try {
+        await fetch(webhook, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ barcode: code })
+        });
+      } catch (err) {
+        console.error(err);
+        setStatus("Scanned, but webhook failed.");
+        setBadge("WEBHOOK ERROR", "error");
+      }
+    }
+
+    async function startCamera() {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      });
+
+      video.srcObject = stream;
+      await video.play();
+
+      const track = stream.getVideoTracks()[0];
+      const caps = track.getCapabilities?.() || {};
+
+      if (caps.focusMode && caps.focusMode.includes("continuous")) {
+        try {
+          await track.applyConstraints({
+            advanced: [{ focusMode: "continuous" }]
+          });
+        } catch (_) {}
+      }
+
+      if (caps.torch) {
+        torchBtn.style.display = "inline-flex";
+        window.toggleTorch = async (on) => {
+          try {
+            await track.applyConstraints({ advanced: [{ torch: !!on }] });
+          } catch (_) {}
+        };
+      } else {
+        torchBtn.style.display = "none";
+      }
+    }
+
+    function stopCamera() {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = null;
+
+      if (zxingReader?.reset) {
+        try { zxingReader.reset(); } catch (_) {}
+      }
+
+      if (stream) {
+        stream.getTracks().forEach(t => t.stop());
+        stream = null;
+      }
+
+      video.srcObject = null;
+      scanning = false;
+      setStatus("Scanner stopped.");
+      setBadge("STOPPED", "idle");
+    }
+
+    async function nativeLoop() {
+      if (!scanning || !detector) return;
+
+      try {
+        const barcodes = await detector.detect(video);
+        if (barcodes.length > 0) {
+          const value = barcodes[0].rawValue;
+          if (value) await sendBarcode(value);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+
+      rafId = requestAnimationFrame(nativeLoop);
+    }
+
+    async function startNativeDetector() {
+      detector = new BarcodeDetector({
+        formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128"]
+      });
+      scanning = true;
+      setStatus("Scanner is live. Point camera to barcode.");
+      setBadge("SCANNING", "live");
+      nativeLoop();
+    }
+
+    async function startZXingFallback() {
+      const hints = new Map();
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+        BarcodeFormat.EAN_13,
+        BarcodeFormat.EAN_8,
+        BarcodeFormat.UPC_A,
+        BarcodeFormat.UPC_E,
+        BarcodeFormat.CODE_128
+      ]);
+
+      zxingReader = new BrowserMultiFormatReader(hints, {
+        delayBetweenScanAttempts: 30,
+        delayBetweenScanSuccess: 500
+      });
+
+      scanning = true;
+      setStatus("Scanner is live. Point camera to barcode.");
+      setBadge("SCANNING", "live");
+
+      await zxingReader.decodeFromVideoElement(video, (result, error) => {
+        if (result) {
+          sendBarcode(result.getText());
+        }
+      });
+    }
+
+    async function startScanning() {
+      try {
+        await startCamera();
+
+        if ("BarcodeDetector" in window) {
+          try {
+            const formats = await BarcodeDetector.getSupportedFormats();
+            const wanted = ["ean_13", "ean_8", "upc_a", "upc_e", "code_128"];
+            const supported = wanted.filter(f => formats.includes(f));
+
+            if (supported.length > 0) {
+              detector = new BarcodeDetector({ formats: supported });
+              scanning = true;
+              setStatus("Scanner is live. Point camera to barcode.");
+              setBadge("SCANNING", "live");
+              nativeLoop();
+              return;
+            }
+          } catch (_) {}
+        }
+
+        await startZXingFallback();
+      } catch (err) {
+        console.error(err);
+        setStatus("Camera/scanner error.");
+        setBadge("ERROR", "error");
+      }
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      startBtn.addEventListener("click", startScanning);
+      stopBtn.addEventListener("click", stopCamera);
+
+      torchBtn.addEventListener("click", async () => {
+        const isOn = torchBtn.dataset.on === "1";
+        if (window.toggleTorch) {
+          await window.toggleTorch(!isOn);
+          torchBtn.dataset.on = isOn ? "0" : "1";
+          torchBtn.textContent = isOn ? "Torch" : "Torch Off";
+        }
+      });
     });
+  </script>
 
-    alert("Barcode Sent: " + result.getText());
-  }
-});
-</script>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
 
+    body {
+      margin: 0;
+      font-family: Inter, Arial, sans-serif;
+      background: linear-gradient(180deg, #0f172a 0%, #111827 100%);
+      color: #f8fafc;
+      min-height: 100vh;
+    }
+
+    .app {
+      max-width: 520px;
+      margin: 0 auto;
+      padding: 20px 16px 28px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .brand {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .brand small {
+      color: #94a3b8;
+      font-size: 12px;
+      letter-spacing: 1.2px;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.1;
+      font-weight: 800;
+    }
+
+    .badge {
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .8px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.06);
+      color: #cbd5e1;
+    }
+
+    .badge.live {
+      background: rgba(34,197,94,.15);
+      color: #86efac;
+      border-color: rgba(34,197,94,.35);
+    }
+
+    .badge.success {
+      background: rgba(59,130,246,.15);
+      color: #93c5fd;
+      border-color: rgba(59,130,246,.35);
+    }
+
+    .badge.error {
+      background: rgba(239,68,68,.15);
+      color: #fca5a5;
+      border-color: rgba(239,68,68,.35);
+    }
+
+    .card {
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 24px;
+      padding: 14px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.25);
+      backdrop-filter: blur(8px);
+    }
+
+    .camera-card {
+      position: relative;
+      overflow: hidden;
+      padding: 0;
+    }
+
+    .camera-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 16px;
+      background: rgba(255,255,255,.04);
+      border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+
+    .camera-header span {
+      color: #cbd5e1;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .camera-box {
+      position: relative;
+      background: #000;
+      aspect-ratio: 3 / 4;
+      overflow: hidden;
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      background: #000;
+    }
+
+    .scan-guide {
+      position: absolute;
+      left: 10%;
+      right: 10%;
+      top: 38%;
+      height: 20%;
+      border: 3px solid rgba(34,197,94,.95);
+      border-radius: 14px;
+      box-shadow: 0 0 0 9999px rgba(0,0,0,.28);
+      pointer-events: none;
+    }
+
+    .scan-line {
+      position: absolute;
+      left: 12%;
+      right: 12%;
+      top: 48%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #22c55e, transparent);
+      box-shadow: 0 0 12px #22c55e;
+      pointer-events: none;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    button {
+      border: none;
+      border-radius: 16px;
+      padding: 14px 12px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform .15s ease, opacity .15s ease;
+    }
+
+    button:active {
+      transform: scale(.98);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      color: white;
+    }
+
+    .btn-dark {
+      background: rgba(255,255,255,.08);
+      color: #f8fafc;
+      border: 1px solid rgba(255,255,255,.08);
+    }
+
+    .btn-accent {
+      background: linear-gradient(135deg, #38bdf8, #2563eb);
+      color: white;
+    }
+
+    #torchBtn {
+      display: none;
+    }
+
+    .status-card,
+    .result-card,
+    .tips-card {
+      margin-top: 14px;
+    }
+
+    .label {
+      color: #94a3b8;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+
+    #status {
+      font-size: 16px;
+      font-weight: 600;
+      color: #e2e8f0;
+    }
+
+    .result-value {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      word-break: break-word;
+      color: #f8fafc;
+    }
+
+    .result-time {
+      margin-top: 8px;
+      font-size: 13px;
+      color: #94a3b8;
+    }
+
+    .tips-card ul {
+      margin: 0;
+      padding-left: 18px;
+      color: #cbd5e1;
+      line-height: 1.6;
+    }
+
+    .footer {
+      text-align: center;
+      color: #64748b;
+      font-size: 12px;
+      margin-top: 18px;
+    }
+
+    @media (max-width: 420px) {
+      .brand h1 {
+        font-size: 24px;
+      }
+
+      .controls {
+        grid-template-columns: 1fr;
+      }
+
+      .result-value {
+        font-size: 24px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="topbar">
+      <div class="brand">
+        <small>SMART INVENTORY SCANNER</small>
+        <h1>Medicine Barcode Scanner</h1>
+      </div>
+      <div id="badge" class="badge idle">READY</div>
+    </div>
+
+    <div class="card camera-card">
+      <div class="camera-header">
+        <span>Live Camera</span>
+        <span>EAN / UPC / CODE128</span>
+      </div>
+
+      <div class="camera-box">
+        <video id="video" autoplay muted playsinline></video>
+        <div class="scan-guide"></div>
+        <div class="scan-line"></div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button id="startBtn" class="btn-primary">Start Scan</button>
+      <button id="stopBtn" class="btn-dark">Stop</button>
+      <button id="torchBtn" class="btn-accent" data-on="0">Torch</button>
+    </div>
+
+    <div class="card status-card">
+      <div class="label">Status</div>
+      <div id="status">Waiting for scan...</div>
+    </div>
+
+    <div class="card result-card">
+      <div class="label">Last Barcode</div>
+      <div id="resultValue" class="result-value">—</div>
+      <div id="resultTime" class="result-time">No scan yet</div>
+    </div>
+
+    <div class="card tips-card">
+      <div class="label">Best Scan Tips</div>
+      <ul>
+        <li>Use the back camera.</li>
+        <li>Keep the barcode inside the green frame.</li>
+        <li>Use good light or enable torch.</li>
+        <li>Printed barcodes scan faster than barcodes on a screen.</li>
+      </ul>
+    </div>
+
+    <div class="footer">
+      Powered by your GitHub Pages scanner
+    </div>
+  </div>
 </body>
 </html>
